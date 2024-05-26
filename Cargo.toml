@@ -1,0 +1,12 @@
+[package]
+name = "yafp"
+version = "0.1.0"
+edition = "2021"
+keywords = ["args", "cli"]
+license = "MIT"
+description = "An ultra simple CLI arguments parser."
+repository = "https://github.com/joaonsantos/flags"
+documentation = "https://docs.rs/yafp/"
+readme = "README.md"
+
+[dependencies]
