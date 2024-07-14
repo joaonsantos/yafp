@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 keywords = ["args", "cli"]
 license = "MIT"
-description = "An ultra simple CLI arguments parser."
-repository = "https://github.com/joaonsantos/flags"
+description = "yafp is a non-POSIX cli flag parser with imperative style flag declaration instead of the usual declarative style."
+repository = "https://github.com/joaonsantos/yafp"
 documentation = "https://docs.rs/yafp/"
 readme = "README.md"
 
