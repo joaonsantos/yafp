@@ -19,9 +19,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
+
   publish:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'release' }}
+    needs: test
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - name: publish crates
