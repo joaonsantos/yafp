@@ -25,6 +25,7 @@ jobs:
     if: ${{ github.event_name == 'release' }}
     needs: test
     steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: publish crates
         uses: katyo/publish-crates@v2
