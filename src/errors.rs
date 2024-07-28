@@ -1,3 +1,4 @@
+//! Defines errors encountered when parsing.
 use std::fmt::{self, Display};
 
 /// A list of possible errors.
@@ -25,4 +26,5 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Alias for a [`std::result::Result`] with the error type [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;

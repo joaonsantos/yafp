@@ -9,7 +9,7 @@ yafp is a non-POSIX cli flag parser with imperative style flag declaration inste
 Features:
 - Help generation.
 - Imperative flag declaration with usage text.
-- Supports boolean flags, `false` if not found `true` if found.
+- Supports boolean flags, `false` by default and `true` if set.
 - Supports required and optional value flags.
 - Values parsed to assigned variable type.
 

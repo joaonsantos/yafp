@@ -1,3 +1,22 @@
+/*!
+yafp is a non-POSIX cli flag parser with imperative style flag declaration instead of the usual declarative style.
+
+Features:
+- Help generation.
+- Imperative flag declaration with usage text.
+- Supports boolean flags, `false` by default and `true` if set.
+- Supports required and optional value flags.
+- Values parsed to assigned variable type.
+
+Limitations:
+- Only supports short flag style.
+- Does not support flag combination, for example, `-fd` is not `-f` and `-d` and is instead a single flag.
+- Non-UTF8 arguments are not supported
+*/
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 use errors::{Error, Result};
 
 use std::collections::HashMap;
@@ -24,7 +43,9 @@ struct FlagEntry {
     typ: Flag,
 }
 
+/// The arguments parser.
 pub struct Parser {
+    /// The name of the command used in the help string.
     pub command: String,
     flags: HashMap<String, FlagEntry>,
     required: Vec<String>,
@@ -32,6 +53,7 @@ pub struct Parser {
 }
 
 impl Parser {
+    /// Initializes a [`Parser`] using [`std::env::args`] as input.
     pub fn from_env() -> Self {
         let mut raw_args: Vec<String> = std::env::args().collect();
         let required: Vec<String> = Vec::new();
@@ -43,6 +65,7 @@ impl Parser {
         }
     }
 
+    /// Initializes a [`Parser`] using a given vector of strings as input.
     pub fn from_vec(args: Vec<String>) -> Self {
         let mut raw_args = args.clone();
         let required: Vec<String> = Vec::new();
@@ -54,6 +77,55 @@ impl Parser {
         }
     }
 
+    /// Defines a boolean flag.
+    ///
+    /// # Examples
+    ///
+    /// ## Flag Set
+    /// ```
+    /// use yafp::Parser;
+    /// use yafp::errors::Error;
+    ///
+    /// let cmd_args: Vec<String> =
+    ///     vec!["head", "-verbose", "file.txt"]
+    ///         .iter()
+    ///         .map(|x| x.to_string())
+    ///         .collect();
+    ///
+    /// let mut parser = Parser::from_vec(cmd_args);
+    /// parser.bool_flag("verbose", "this is used to get verbose output");
+    ///
+    /// /// This must be called before fetching flags and returns any remaining args.
+    /// parser.finalize()?;
+    ///
+    /// /// Since the verbose flag is set this returns true.
+    /// let verbose: Option<bool> = parser.get_value("verbose");
+    /// assert_eq!(Some(true), verbose);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// ## Flag Unset
+    /// ```
+    /// use yafp::Parser;
+    /// use yafp::errors::Error;
+    ///
+    /// let cmd_args: Vec<String> =
+    ///     vec!["head", "file.txt"]
+    ///         .iter()
+    ///         .map(|x| x.to_string())
+    ///         .collect();
+    ///
+    /// let mut parser = Parser::from_vec(cmd_args);
+    /// parser.bool_flag("verbose", "this is used to get verbose output");
+    ///
+    /// /// This must be called before fetching flags and returns any remaining args.
+    /// parser.finalize()?;
+    ///
+    /// /// Since the verbose flag is not set this returns false.
+    /// let verbose: Option<bool> = parser.get_value("verbose");
+    /// assert_eq!(Some(false), verbose);
+    /// # Ok::<(), Error>(())
+    /// ```
     pub fn bool_flag(&mut self, flag: &str, usage: &str) {
         self.flags.insert(
             flag.to_string(),
@@ -65,6 +137,39 @@ impl Parser {
         );
     }
 
+    /// Defines a required flag that accepts a value.
+    ///
+    /// If the flag is not set then [`crate::Parser::finalize`] returns an error
+    /// result of type [`crate::errors::Error::MissingArgument`].
+    ///
+    /// If the flag is set but no value is given then [`crate::Parser::finalize`] returns an error
+    /// result of type [`crate::errors::Error::MissingValue`].
+    ///
+    /// # Examples
+    ///
+    /// ## Flag Set
+    /// ```
+    /// use yafp::Parser;
+    /// use yafp::errors::Error;
+    ///
+    /// let cmd_args: Vec<String> =
+    ///     vec!["head", "-file", "file.txt"]
+    ///         .iter()
+    ///         .map(|x| x.to_string())
+    ///         .collect();
+    ///
+    /// let mut parser = Parser::from_vec(cmd_args);
+    /// parser.required_flag("file", "this is used to set the path for a file");
+    ///
+    /// /// This must be called before fetching flags and returns any remaining args.
+    /// parser.finalize()?;
+    ///
+    /// /// Since the flag is set this returns the given file path.
+    /// let file: Option<String> = parser.get_value("file");
+    /// assert_eq!(Some(String::from("file.txt")), file);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
     pub fn required_flag(&mut self, flag: &str, usage: &str) {
         self.required.push(flag.to_string());
         self.flags.insert(
@@ -77,6 +182,10 @@ impl Parser {
         );
     }
 
+    /// Defines an optional flag that accepts a value.
+    ///
+    /// Similar to [`crate::Parser::required_flag`] but [`crate::Parser::finalize`] will not return
+    /// an error result if the flag is missing.
     pub fn optional_flag(&mut self, flag: &str, usage: &str) {
         self.flags.insert(
             flag.to_string(),
@@ -88,6 +197,7 @@ impl Parser {
         );
     }
 
+    /// Returns the value of a flag.
     pub fn get_value<T>(&self, flag: &str) -> Option<T>
     where
         T: FromStr,
@@ -105,30 +215,37 @@ impl Parser {
         }
     }
 
-    pub fn help(&self) -> String {
-        let mut help_string = vec![format!("Usage: {} [options...]", self.command)];
-
-        // Ensure help is generated deterministically by sorting the flags.
+    /// Returns a string with the generated flag information.
+    pub fn help_flags(&self) -> String {
         let mut flag_keys: Vec<String> = Vec::new();
         for (key, _) in self.flags.iter() {
             flag_keys.push(key.to_string());
         }
+        // Ensure flag help is deterministic by sorting flag names.
         flag_keys.sort();
 
+        let mut flag_help_parts: Vec<String> = Vec::new();
         for key in flag_keys {
             let flag_entry = self.flags.get(&key).unwrap();
             match flag_entry.typ {
                 Flag::Value => {
                     let usage = format!("{} {}", key, "value");
-                    help_string.push(format!("  -{}", usage));
+                    flag_help_parts.push(format!("  -{}", usage));
                 }
-                _ => help_string.push(format!("  -{}", key)),
+                _ => flag_help_parts.push(format!("  -{}", key)),
             }
-            help_string.push(format!("\t{}", flag_entry.usage));
+            flag_help_parts.push(format!("\t{}", flag_entry.usage));
         }
-        let mut help_string = help_string.join("\n");
-        help_string.push_str("\n");
-        help_string
+        format!("{}\n", flag_help_parts.join("\n"))
+    }
+
+    /// Returns a string with the usage string.
+    ///
+    /// If you use positional arguments it might be useful to define a custom function
+    /// which prints the usage line and then prints the string returned by [`crate::Parser::help_flags`].
+    pub fn help(&self) -> String {
+        let help_string = format!("Usage: {} [options...]", self.command);
+        format!("{}\n{}", help_string, self.help_flags())
     }
 
     fn consume_flag<I>(&mut self, flag: String, it: &mut Peekable<I>) -> Result<()>
@@ -202,6 +319,12 @@ impl Parser {
         }
     }
 
+    /// Parses the arguments taking into account all defined flags and returns any remaining
+    /// non-flag arguments.
+    ///
+    /// # Errors
+    ///
+    /// Depending on the flags set, it returns a variant of [`crate::errors::Error`].
     pub fn finalize(&mut self) -> Result<Vec<String>> {
         let mut remaining: Vec<String> = Vec::new();
 
