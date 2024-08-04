@@ -50,6 +50,7 @@ pub struct Parser {
     flags: HashMap<String, FlagEntry>,
     required: Vec<String>,
     raw_args: Vec<String>,
+    help_fn: Option<Box<dyn Fn() -> String>>,
 }
 
 impl Parser {
@@ -62,6 +63,7 @@ impl Parser {
             flags: HashMap::new(),
             raw_args,
             required,
+            help_fn: None,
         }
     }
 
@@ -74,6 +76,7 @@ impl Parser {
             flags: HashMap::new(),
             raw_args,
             required,
+            help_fn: None,
         }
     }
 
@@ -81,7 +84,7 @@ impl Parser {
     ///
     /// # Examples
     ///
-    /// ## Flag Set
+    /// ## Boolean Flag Set
     /// ```
     /// use yafp::Parser;
     /// use yafp::errors::Error;
@@ -104,7 +107,7 @@ impl Parser {
     /// # Ok::<(), Error>(())
     /// ```
     ///
-    /// ## Flag Unset
+    /// ## Boolean Flag Unset
     /// ```
     /// use yafp::Parser;
     /// use yafp::errors::Error;
@@ -147,7 +150,7 @@ impl Parser {
     ///
     /// # Examples
     ///
-    /// ## Flag Set
+    /// ## Required Flag Set
     /// ```
     /// use yafp::Parser;
     /// use yafp::errors::Error;
@@ -243,9 +246,79 @@ impl Parser {
     ///
     /// If you use positional arguments it might be useful to define a custom function
     /// which prints the usage line and then prints the string returned by [`crate::Parser::help_flags`].
+    ///
+    /// # Examples
+    ///
+    /// ## Default Help
+    /// ```
+    /// use yafp::Parser;
+    /// use yafp::errors::Error;
+    ///
+    /// let cmd_args: Vec<String> =
+    ///     vec!["head", "-verbose", "file.txt"]
+    ///         .iter()
+    ///         .map(|x| x.to_string())
+    ///         .collect();
+    ///
+    /// let mut parser = Parser::from_vec(cmd_args);
+    /// parser.bool_flag("verbose", "this is used to get verbose output");
+    ///
+    /// /// This must be called before fetching flags and returns any remaining args.
+    /// parser.finalize()?;
+    ///
+    /// /// Using the default help function does not allow you to specify the positional args but let's you get
+    /// /// the basic help working.
+    /// let help: String = parser.help();
+    /// assert_eq!(String::from("Usage: head [options...]\n  -verbose\n\tthis is used to get verbose output\n"), help);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// ## Custom Help
+    /// ```
+    /// use yafp::Parser;
+    /// use yafp::errors::Error;
+    ///
+    /// let cmd_args: Vec<String> =
+    ///     vec!["head", "-verbose", "file.txt"]
+    ///         .iter()
+    ///         .map(|x| x.to_string())
+    ///         .collect();
+    ///
+    /// let mut parser = Parser::from_vec(cmd_args);
+    /// parser.bool_flag("verbose", "this is used to get verbose output");
+    ///
+    /// let command = parser.command.to_string();
+    /// let help_flags = parser.help_flags();
+    /// parser.set_help_fn(move || {
+    ///   let help_string = format!("Usage: {} [options...] <file>", command);
+    ///   format!("{}\n{}", help_string, help_flags)
+    /// });
+    ///
+    /// /// This must be called before fetching flags and returns any remaining args.
+    /// parser.finalize()?;
+    ///
+    /// /// Using the default help function does not allow you to specify the positional args but let's you get
+    /// /// the basic help working.
+    /// let help: String = parser.help();
+    /// assert_eq!(String::from("Usage: head [options...] <file>\n  -verbose\n\tthis is used to get verbose output\n"), help);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
     pub fn help(&self) -> String {
-        let help_string = format!("Usage: {} [options...]", self.command);
-        format!("{}\n{}", help_string, self.help_flags())
+        match &self.help_fn {
+            Some(f) => f(),
+            None => {
+                let help_string = format!("Usage: {} [options...]", self.command);
+                format!("{}\n{}", help_string, self.help_flags())
+            }
+        }
+    }
+
+    /// Accepts a closure that defines a custom help function, for an example usage check the [custom help example].
+    ///
+    /// [custom help example]: crate::Parser#custom-help
+    pub fn set_help_fn(&mut self, f: impl Fn() -> String + 'static) {
+        self.help_fn = Some(Box::new(f));
     }
 
     fn consume_flag<I>(&mut self, flag: String, it: &mut Peekable<I>) -> Result<()>
@@ -367,6 +440,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
